@@ -1,5 +1,6 @@
 import express from "express";
 import { chat } from "./controllers/chat.controller.js";
+import { embedding } from "./controllers/embedding.controller.js";
 const app = express();
 
 // parse json request body
@@ -13,6 +14,7 @@ app.get("/", (req, res) => {
 });
 
 app.post("/chat", chat);
+app.post("/embedding", embedding);
 
 const port = process.env.PORT || 5000; // Default to port 3000 if PORT environment variable is not set
 

@@ -6,11 +6,12 @@ generator client {
 datasource db {
   provider   = "postgresql"
   url        = env("DATABASE_URL")
-  extensions = [uuid_ossp(map: "uuid-ossp", schema: "extensions"), vector]
+  relationMode = "prisma"
+  extensions = [vector]
 }
 
 model documents {
   id        BigInt                 @id @default(autoincrement())
   content   String?
-  embedding Unsupported("vector")?
+  embedding  Unsupported("vector(1536)")?
 }
