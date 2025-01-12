@@ -50,3 +50,68 @@ export const embedding = async (req: Request, res: Response) => {
     return res.status(500).json({ error: "Failed to create embedding" });
   }
 };
+
+////////// embedding chat ////
+
+const chatValidation = Joi.object({
+  message: Joi.string().required(),
+});
+
+export const chatEmbed = async (req: Request, res: Response) => {
+  try {
+    const { error, value } = chatValidation.validate(req.body);
+    if (error) {
+      return res.status(400).json({ error: error.details[0].message });
+    }
+
+    // First, get relevant documents from vector search
+    const embeddingResponse = await openai.embeddings.create({
+      model: "text-embedding-3-small",
+      input: value.message,
+      encoding_format: "float",
+    });
+
+    const searchVector = embeddingResponse.data[0].embedding;
+
+    // Get relevant documents
+    const relevantDocs: any = await prisma.$queryRaw`
+        SELECT content, 1 - (embedding <=> ${JSON.stringify(
+          searchVector
+        )}::vector(1536)) as similarity
+        FROM documents
+        WHERE embedding IS NOT NULL
+        ORDER BY embedding <=> ${JSON.stringify(searchVector)}::vector(1536)
+        LIMIT 3;
+      `;
+
+    // Create context from relevant documents
+    const context = relevantDocs.map((doc: any) => doc.content).join("\n");
+
+    // Create chat completion with context
+    const response = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [
+        {
+          role: "system",
+          content: `You are a helpful assistant. Use the following context to help answer questions, but also use your general knowledge when needed. If the context isn't relevant, just respond normally.\n\nContext:\n${context}`,
+        },
+        {
+          role: "user",
+          content: value.message,
+        },
+      ],
+    });
+
+    let finalResponse;
+
+    finalResponse = response.choices[0].message.content;
+
+    return res.json({
+      response: finalResponse,
+      // relevantDocs: relevantDocs,
+    });
+  } catch (error) {
+    console.error("Error in chat endpoint:", error);
+    return res.status(500).json({ error: "Failed to process chat request" });
+  }
+};
